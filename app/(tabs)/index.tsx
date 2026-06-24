@@ -274,28 +274,28 @@ export default function DashboardScreen() {
             title="Level" 
             value={`${batteryState.level}%`} 
             icon="battery-half" 
-            color={isCharging ? '#00e676' : '#1A5276'} 
+            color={isCharging ? '#00e676' : '#3498db'} 
           />
           
           <StatCard 
             title="Capacity" 
             value={capacityStr} 
             icon="flash" 
-            color="#1A5276" 
+            color="#f1c40f" 
           />
           
           <StatCard 
             title="Voltage" 
             value={`${voltageV} V`} 
             icon="speedometer-outline" 
-            color="#1A5276" 
+            color="#9b59b6" 
           />
           
           <StatCard 
             title="Power" 
             value={`${powerW} W`} 
             icon="flash-outline" 
-            color="#1A5276" 
+            color="#e67e22" 
           />
           
           <StatCard 
@@ -316,14 +316,14 @@ export default function DashboardScreen() {
             title="Plug Type" 
             value={plugStr} 
             icon="power-outline" 
-            color="#1A5276" 
+            color="#34495e" 
           />
           
           <StatCard 
             title="Cycle Count" 
             value={batteryState.cycleCount > 0 ? batteryState.cycleCount : 'N/A'} 
             icon="sync-outline" 
-            color="#1A5276" 
+            color="#8e44ad" 
           />
         </View>
       </ScrollView>

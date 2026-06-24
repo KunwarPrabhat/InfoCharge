@@ -14,7 +14,7 @@ export default function StatCard({ title, value, icon, color = '#3498db' }: Stat
     <View style={styles.card}>
       <View style={styles.header}>
         <View style={[styles.iconContainer, { backgroundColor: `${color}20` }]}>
-          <Ionicons name={icon} size={20} color={color} />
+          <Ionicons name={icon} size={28} color={color} />
         </View>
         <Text style={styles.title} numberOfLines={1} adjustsFontSizeToFit>{title}</Text>
       </View>
@@ -26,17 +26,12 @@ export default function StatCard({ title, value, icon, color = '#3498db' }: Stat
 const styles = StyleSheet.create({
   card: {
     width: '48%', // two columns
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(255, 255, 255, 0.2)',
     borderWidth: 1,
     padding: 16,
     borderRadius: 16,
     marginVertical: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
   },
   header: {
     flexDirection: 'row',
@@ -44,9 +39,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   iconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 8,
