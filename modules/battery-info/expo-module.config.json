@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android", "web"],
+  "apple": {
+    "modules": ["BatteryInfoModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.batteryinfo.BatteryInfoModule"]
+  }
+}

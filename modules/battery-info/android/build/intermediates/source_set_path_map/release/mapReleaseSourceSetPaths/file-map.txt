@@ -1,0 +1,7 @@
+expo.modules.batteryinfo.battery-info-pngs-0 /home/zeron/Projects/InfoCharge/InfoCharge/modules/battery-info/android/build/generated/res/pngs/release
+expo.modules.batteryinfo.battery-info-resValues-1 /home/zeron/Projects/InfoCharge/InfoCharge/modules/battery-info/android/build/generated/res/resValues/release
+expo.modules.batteryinfo.battery-info-mergeReleaseResources-2 /home/zeron/Projects/InfoCharge/InfoCharge/modules/battery-info/android/build/intermediates/incremental/release/mergeReleaseResources/merged.dir
+expo.modules.batteryinfo.battery-info-mergeReleaseResources-3 /home/zeron/Projects/InfoCharge/InfoCharge/modules/battery-info/android/build/intermediates/incremental/release/mergeReleaseResources/stripped.dir
+expo.modules.batteryinfo.battery-info-release-4 /home/zeron/Projects/InfoCharge/InfoCharge/modules/battery-info/android/build/intermediates/merged_res/release/mergeReleaseResources
+expo.modules.batteryinfo.battery-info-main-5 /home/zeron/Projects/InfoCharge/InfoCharge/modules/battery-info/android/src/main/res
+expo.modules.batteryinfo.battery-info-release-6 /home/zeron/Projects/InfoCharge/InfoCharge/modules/battery-info/android/src/release/res
