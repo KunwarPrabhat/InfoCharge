@@ -72,16 +72,16 @@ export default function AnimatedBackground() {
       {/* Orbs drifting using Reanimated Sine wave approximations */}
       
       {/* Dark Violet */}
-      <AnimatedFluidOrb color="#240046" duration={6000} startX={width * 0.2} startY={height * 0.2} radius={width * 0.5} />
+      <AnimatedFluidOrb color="#240046" duration={3000} startX={width * 0.2} startY={height * 0.2} radius={width * 0.5} />
       
       {/* Dark Charcoal Teal */}
-      <AnimatedFluidOrb color="#03254c" duration={7500} startX={width * 0.8} startY={height * 0.8} radius={width * 0.6} />
+      <AnimatedFluidOrb color="#03254c" duration={3750} startX={width * 0.8} startY={height * 0.8} radius={width * 0.6} />
       
       {/* Deep Plum */}
-      <AnimatedFluidOrb color="#3c096c" duration={9000} startX={width * 0.6} startY={height * 0.3} radius={width * 0.55} />
+      <AnimatedFluidOrb color="#3c096c" duration={4500} startX={width * 0.6} startY={height * 0.3} radius={width * 0.55} />
       
       {/* Midnight Blue */}
-      <AnimatedFluidOrb color="#0a1128" duration={7000} startX={width * 0.3} startY={height * 0.7} radius={width * 0.45} />
+      <AnimatedFluidOrb color="#0a1128" duration={3500} startX={width * 0.3} startY={height * 0.7} radius={width * 0.45} />
     </Canvas>
   );
 }

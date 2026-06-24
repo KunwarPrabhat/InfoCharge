@@ -48,8 +48,8 @@ export default function Meter({ currentmA, statusText, isCharging }: MeterProps)
         <Defs>
           {/* Darker aesthetic gradients */}
           <LinearGradient id="gradCharge" x1="0%" y1="0%" x2="100%" y2="100%">
-            <Stop offset="0%" stopColor="#1E8449" stopOpacity="1" />
-            <Stop offset="100%" stopColor="#117A65" stopOpacity="1" />
+            <Stop offset="0%" stopColor="#00e676" stopOpacity="1" />
+            <Stop offset="100%" stopColor="#00b259" stopOpacity="1" />
           </LinearGradient>
           <LinearGradient id="gradDischarge" x1="0%" y1="0%" x2="100%" y2="100%">
             <Stop offset="0%" stopColor="#922B21" stopOpacity="1" />
