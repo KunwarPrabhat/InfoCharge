@@ -4,18 +4,23 @@
     "slug": "InfoCharge",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/android/ic_launcher-web.png",
+    "icon": "./assets/android/mipmap-xxxhdpi/ic_launcher.png",
     "scheme": "infocharge",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.anonymous.InfoCharge"
     },
     "android": {
-      "permissions": ["android.permission.PACKAGE_USAGE_STATS", "android.permission.QUERY_ALL_PACKAGES", "android.permission.READ_PHONE_STATE"],
+      "permissions": [
+        "android.permission.PACKAGE_USAGE_STATS",
+        "android.permission.QUERY_ALL_PACKAGES",
+        "android.permission.READ_PHONE_STATE"
+      ],
       "adaptiveIcon": {
-        "backgroundColor": "#38BCBC",
-        "foregroundImage": "./assets/android/ic_launcher-web.png"
+        "backgroundColor": "#ffd1f5",
+        "foregroundImage": "./assets/android/mipmap-xxxhdpi/ic_launcher_foreground.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
@@ -23,18 +28,20 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/android/ic_launcher-web.png"
+      "favicon": "./assets/android/mipmap-xxxhdpi/ic_launcher_round.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#38BCBC",
-          "iconBackgroundColor": "#38BCBC",
+          "image": "./assets/android/mipmap-xxxhdpi/ic_launcher_foreground.png",
+          "backgroundColor": "#ffd1f5",
+          "iconBackgroundColor": "#ffd1f5",
           "dark": {
-            "backgroundColor": "#000000",
-            "iconBackgroundColor": "#38BCBC"
+            "image": "./assets/android/mipmap-xxxhdpi/ic_launcher_foreground.png",
+            "backgroundColor": "#ffd1f5",
+            "iconBackgroundColor": "#ffd1f5"
           }
         }
       ]
