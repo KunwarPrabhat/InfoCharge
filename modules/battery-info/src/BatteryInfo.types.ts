@@ -14,5 +14,14 @@ export type BatteryState = {
 };
 
 export type BatteryStateChangeEvent = {
-  // It seems Expo's Events sends the exact payload we passed
 } & BatteryState;
+
+export type NetworkUsageStat = {
+  uid: number;
+  packageName: string;
+  appName: string;
+  rxBytes: number;
+  txBytes: number;
+  totalBytes?: number;
+  iconBase64?: string;
+};

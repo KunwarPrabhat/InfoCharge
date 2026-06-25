@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { StyleSheet, ScrollView, SafeAreaView, Platform, Text, View } from 'react-native';
+import { StyleSheet, ScrollView, Platform, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Meter from '@/components/Meter';
 import StatCard from '@/components/StatCard';
 import * as BatteryInfo from '@/modules/battery-info';
@@ -9,7 +10,8 @@ import { StorageService, UserSettings } from '@/services/storage';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
   }),
@@ -338,7 +340,7 @@ const styles = StyleSheet.create({
   },
   container: {
     paddingVertical: 24,
-    paddingBottom: 40,
+    paddingBottom: 200, // Significantly increased to fully clear the absolute tab bar
   },
   estimationContainer: {
     alignItems: 'center',

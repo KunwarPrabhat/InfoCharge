@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, ScrollView, SafeAreaView, Switch, Text, View, TextInput, Alert } from 'react-native';
+import { StyleSheet, ScrollView, Switch, Text, View, TextInput, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { StorageService, UserSettings, DEFAULT_SETTINGS } from '@/services/storage';
 
 export default function SettingsScreen() {

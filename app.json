@@ -12,6 +12,7 @@
       "supportsTablet": true
     },
     "android": {
+      "permissions": ["android.permission.PACKAGE_USAGE_STATS", "android.permission.QUERY_ALL_PACKAGES", "android.permission.READ_PHONE_STATE"],
       "adaptiveIcon": {
         "backgroundColor": "#0A0A0A",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
