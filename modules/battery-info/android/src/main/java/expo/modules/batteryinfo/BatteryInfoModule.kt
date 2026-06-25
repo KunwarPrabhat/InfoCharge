@@ -286,5 +286,17 @@ class BatteryInfoModule : Module() {
           return@AsyncFunction "Unknown"
       }
     }
+
+    AsyncFunction("measurePingNative") { host: String, port: Int ->
+      val start = System.currentTimeMillis()
+      try {
+        val socket = java.net.Socket()
+        socket.connect(java.net.InetSocketAddress(host, port), 1000)
+        socket.close()
+        (System.currentTimeMillis() - start).toDouble()
+      } catch (e: java.lang.Exception) {
+        -1.0
+      }
+    }
   }
 }

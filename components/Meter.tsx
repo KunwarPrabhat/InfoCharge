@@ -15,6 +15,32 @@ interface MeterProps {
   isCharging: boolean;
 }
 
+const interpolateColor = (val: number, minVal: number, maxVal: number, color1: string, color2: string) => {
+  if (val <= minVal) return color1;
+  if (val >= maxVal) return color2;
+  
+  const r1 = parseInt(color1.substring(1, 3), 16);
+  const g1 = parseInt(color1.substring(3, 5), 16);
+  const b1 = parseInt(color1.substring(5, 7), 16);
+  
+  const r2 = parseInt(color2.substring(1, 3), 16);
+  const g2 = parseInt(color2.substring(3, 5), 16);
+  const b2 = parseInt(color2.substring(5, 7), 16);
+  
+  const ratio = (val - minVal) / (maxVal - minVal);
+  
+  const r = Math.round(r1 + (r2 - r1) * ratio);
+  const g = Math.round(g1 + (g2 - g1) * ratio);
+  const b = Math.round(b1 + (b2 - b1) * ratio);
+  
+  const toHex = (c: number) => {
+    const hex = c.toString(16);
+    return hex.length === 1 ? '0' + hex : hex;
+  };
+  
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+};
+
 export default function Meter({ currentmA, statusText, isCharging }: MeterProps) {
   const animatedValue = useSharedValue(0);
   
@@ -42,18 +68,24 @@ export default function Meter({ currentmA, statusText, isCharging }: MeterProps)
     };
   });
 
+  const absVal = Math.min(Math.abs(currentmA), 5000);
+  const textChargeColor = interpolateColor(absVal, 500, 4500, '#ff8a80', '#bd00ff');
+  const textDischargeColor = interpolateColor(absVal, 500, 4500, '#00e5ff', '#bd00ff');
+
   return (
     <View style={styles.container}>
       <Svg width={size} height={size}>
         <Defs>
-          {/* Darker aesthetic gradients */}
+          {/* Static rich gradients representing color mixtures from light to deep purple */}
           <LinearGradient id="gradCharge" x1="0%" y1="0%" x2="100%" y2="100%">
-            <Stop offset="0%" stopColor="#00e676" stopOpacity="1" />
-            <Stop offset="100%" stopColor="#00b259" stopOpacity="1" />
+            <Stop offset="0%" stopColor="#ff8a80" stopOpacity="1" />
+            <Stop offset="50%" stopColor="#ff3b70" stopOpacity="1" />
+            <Stop offset="100%" stopColor="#bd00ff" stopOpacity="1" />
           </LinearGradient>
           <LinearGradient id="gradDischarge" x1="0%" y1="0%" x2="100%" y2="100%">
-            <Stop offset="0%" stopColor="#922B21" stopOpacity="1" />
-            <Stop offset="100%" stopColor="#7B241C" stopOpacity="1" />
+            <Stop offset="0%" stopColor="#00e5ff" stopOpacity="1" />
+            <Stop offset="50%" stopColor="#0084ff" stopOpacity="1" />
+            <Stop offset="100%" stopColor="#bd00ff" stopOpacity="1" />
           </LinearGradient>
         </Defs>
         <G rotation="135" origin={`${size/2}, ${size/2}`}>
@@ -100,7 +132,7 @@ export default function Meter({ currentmA, statusText, isCharging }: MeterProps)
       </Svg>
       
       <View style={styles.textContainer}>
-        <Text style={[styles.currentText, { color: isCharging ? '#2ecc71' : '#e74c3c' }]}>
+        <Text style={[styles.currentText, { color: isCharging ? textChargeColor : textDischargeColor }]}>
           {Math.abs(Math.round(currentmA))}
         </Text>
         <Text style={styles.unitText}>mA</Text>

@@ -41,6 +41,10 @@ export async function getNetworkProvider(): Promise<string> {
   return await BatteryInfoModule.getNetworkProvider();
 }
 
+export async function measurePingNative(host: string, port: number): Promise<number> {
+  return await BatteryInfoModule.measurePingNative(host, port);
+}
+
 export function addBatteryStateListener(listener: (event: BatteryState) => void) {
   return BatteryInfoModule.addListener('onBatteryStateChanged', listener);
 }

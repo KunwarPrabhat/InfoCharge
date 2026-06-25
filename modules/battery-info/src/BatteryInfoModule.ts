@@ -12,6 +12,9 @@ declare class BatteryInfoModule extends NativeModule<{
   getNetworkUsageSinceMidnight(): Promise<NetworkUsageStat[]>;
   getLiveTrafficStats(): Promise<NetworkUsageStat[]>;
   getNetworkProvider(): Promise<string>;
+  getAppRxBytes(): number;
+  getAppTxBytes(): number;
+  measurePingNative(host: string, port: number): Promise<number>;
 }
 
 export default requireNativeModule<BatteryInfoModule>('BatteryInfo');

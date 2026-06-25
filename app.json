@@ -30,9 +30,6 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/android/ic_launcher-web.png",
-          "imageWidth": 200,
-          "resizeMode": "contain",
           "backgroundColor": "#38BCBC",
           "iconBackgroundColor": "#38BCBC",
           "dark": {

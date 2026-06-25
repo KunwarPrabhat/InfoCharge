@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { StyleSheet, ScrollView, Text, View, TouchableOpacity, Animated, Image, AppState, AppStateStatus, TextInput, Easing } from 'react-native';
+import { StyleSheet, ScrollView, Text, View, TouchableOpacity, Animated, Image, AppState, AppStateStatus, TextInput, Easing, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Defs, LinearGradient, Stop, Circle, Line, Text as SvgText } from 'react-native-svg';
 import { Feather, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
@@ -11,6 +11,7 @@ import {
   getNetworkUsageSinceMidnight, 
   getAppRxBytes,
   getAppTxBytes,
+  measurePingNative,
   NetworkUsageStat 
 } from '@/modules/battery-info';
 
@@ -206,6 +207,9 @@ const Speedometer = ({
 };
 
 export default function InternetScreen() {
+  const { width: screenWidth } = Dimensions.get('window');
+  const graphWidth = screenWidth - 80;
+
   const [activeTab, setActiveTab] = useState<'Overall' | 'Speed Test'>('Speed Test');
   const [hasPermission, setHasPermission] = useState<boolean>(false);
   const [overallData, setOverallData] = useState<NetworkUsageStat[]>([]);
@@ -218,6 +222,12 @@ export default function InternetScreen() {
   const [uploadSpeed, setUploadSpeed] = useState<number | null>(null);
   const [ping, setPing] = useState<number | null>(null);
   const [statusText, setStatusText] = useState('Test Now');
+
+  // Ping Diagnostic State
+  const [pingTesting, setPingTesting] = useState(false);
+  const [pingHistory, setPingHistory] = useState<number[]>([]);
+  const [pingTimeText, setPingTimeText] = useState<string>('');
+  const pingAbortControllerRef = useRef<boolean>(false);
   
   const animatedPercent = useRef(new Animated.Value(0)).current;
   const animatedNeedlePercent = useRef(new Animated.Value(0)).current;
@@ -225,20 +235,20 @@ export default function InternetScreen() {
   const abortControllerRef = useRef<AbortController | null>(null);
   const isTestingRef = useRef(false);
 
-  const animateToSpeed = useCallback((speed: number, duration = 300) => {
+  const animateToSpeed = useCallback((speed: number, duration = 300, isLinear = false) => {
     const targetPercent = getPercent(speed);
     Animated.parallel([
       Animated.timing(animatedPercent, {
         toValue: targetPercent,
         duration,
         useNativeDriver: false,
-        easing: Easing.out(Easing.ease),
+        easing: isLinear ? Easing.linear : Easing.out(Easing.ease),
       }),
       Animated.timing(animatedNeedlePercent, {
         toValue: targetPercent,
         duration,
         useNativeDriver: true,
-        easing: Easing.out(Easing.ease),
+        easing: isLinear ? Easing.linear : Easing.out(Easing.ease),
       })
     ]).start();
   }, [animatedPercent, animatedNeedlePercent]);
@@ -284,14 +294,28 @@ export default function InternetScreen() {
 
   const measurePing = async () => {
     setStatusText('Testing Ping...');
-    const start = Date.now();
+    const url = `https://www.google.com/favicon.ico?t=${Date.now()}`;
+    
+    // Warm up connection (DNS lookup + TCP handshake + TLS connection setup)
     try {
-      await fetch(`https://www.google.com/favicon.ico?t=${start}`, { cache: 'no-store' });
-      const end = Date.now();
-      return end - start;
-    } catch(e) {
-      return 0;
+      await fetch(url, { cache: 'no-store' });
+    } catch(e) {}
+
+    // Run 3 sequential trials and take the minimum duration
+    let minPing = 9999;
+    for (let i = 0; i < 3; i++) {
+      const start = Date.now();
+      try {
+        await fetch(`https://www.google.com/favicon.ico?t=${Date.now()}_${i}`, { cache: 'no-store' });
+        const duration = Date.now() - start;
+        if (duration < minPing) {
+          minPing = duration;
+        }
+      } catch(e) {}
+      // Short yield delay between trials
+      await new Promise(r => setTimeout(r, 60));
     }
+    return minPing === 9999 ? 0 : minPing;
   };
 
   const stopTest = () => {
@@ -305,7 +329,7 @@ export default function InternetScreen() {
     animateToSpeed(0, 300);
   };
 
-  const runNativeSpeedTest = (type: 'download' | 'upload') => {
+  const runNativeSpeedTest = (type: 'download' | 'upload', durationMs = 10000) => {
     return new Promise<number>(async (resolve) => {
       const startTime = Date.now();
       const abortController = new AbortController();
@@ -345,7 +369,7 @@ export default function InternetScreen() {
 
       const initialBytes = type === 'download' ? getAppRxBytes() : getAppTxBytes();
       const samples: { time: number; bytes: number }[] = [{ time: startTime, bytes: initialBytes }];
-      let smoothSpeed = 0;
+      let currentSpeed = 0;
 
       const interval = setInterval(() => {
         if (!isTestingRef.current) {
@@ -370,11 +394,17 @@ export default function InternetScreen() {
         const bytesDiff = Math.max(0, newest.bytes - oldest.bytes);
         const rawSpeed = timeDiff > 0 ? (bytesDiff * 8 / timeDiff) / 1000000 : 0;
 
-        // Exponential moving average for ultimate smoothing
-        smoothSpeed = smoothSpeed === 0 ? rawSpeed : smoothSpeed * 0.7 + rawSpeed * 0.3;
-        animateToSpeed(smoothSpeed, 50);
+        // Linear interpolation logic for constant animation speed
+        // Limit the change to a maximum rate of 15 Mbps per 50ms interval (300 Mbps per second)
+        const maxStep = 15;
+        let diff = rawSpeed - currentSpeed;
+        if (diff > maxStep) diff = maxStep;
+        else if (diff < -maxStep) diff = -maxStep;
 
-        if (now - startTime >= 10000) {
+        currentSpeed += diff;
+        animateToSpeed(currentSpeed, 50, true); // true for linear easing
+
+        if (now - startTime >= durationMs) {
           clearInterval(interval);
           if (abortControllerRef.current) {
             abortControllerRef.current.abort();
@@ -395,14 +425,10 @@ export default function InternetScreen() {
     setIsTesting(true);
     setDownloadSpeed(null);
     setUploadSpeed(null);
-    setPing(null);
     animateToSpeed(0, 0); // instantly reset needle to 0
     
-    const pingVal = await measurePing();
-    if (!isTestingRef.current) return;
-    
     setStatusText('Testing Download...');
-    const dSpeed = await runNativeSpeedTest('download'); 
+    const dSpeed = await runNativeSpeedTest('download', 15000); 
     if (!isTestingRef.current) return;
     
     // Reset needle to 0 smoothly before upload test
@@ -412,12 +438,11 @@ export default function InternetScreen() {
     
     setStatusText('Testing Upload...');
     isTestingRef.current = true; // reset true for next phase
-    const uSpeed = await runNativeSpeedTest('upload');
+    const uSpeed = await runNativeSpeedTest('upload', 10000);
     if (!isTestingRef.current) return;
     animateToSpeed(0, 400); // return to 0 smoothly at the end
     
     // Set all results at the very end of the test!
-    setPing(pingVal);
     setDownloadSpeed(dSpeed);
     setUploadSpeed(uSpeed);
     
@@ -425,6 +450,75 @@ export default function InternetScreen() {
     setIsTesting(false);
     isTestingRef.current = false;
   };
+
+  const startPingTest = async () => {
+    setPingTesting(true);
+    setPingHistory([]);
+    pingAbortControllerRef.current = false;
+
+    const now = new Date();
+    const formattedTime = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    let netProvider = 'Wi-Fi';
+    try {
+      netProvider = await getNetworkProvider();
+    } catch(e) {}
+    setPingTimeText(`${formattedTime}  ${netProvider}:`);
+
+    const targetHost = "8.8.8.8";
+    const targetPort = 53;
+
+    // Discard the first 3 trials to warm up JVM and cellular radio channel (bypass cold handshake spike)
+    for (let i = 0; i < 3; i++) {
+      await measurePingNative(targetHost, targetPort);
+      if (pingAbortControllerRef.current) {
+        setPingTesting(false);
+        return;
+      }
+      await new Promise(r => setTimeout(r, 100));
+    }
+
+    const startTime = Date.now();
+    const duration = 20000; // 20 seconds
+    const intervalMs = 150; // ping every 150ms
+
+    while (Date.now() - startTime < duration && !pingAbortControllerRef.current) {
+      const p = await measurePingNative(targetHost, targetPort);
+      if (p >= 0 && !pingAbortControllerRef.current) {
+        setPingHistory(prev => [...prev, p]);
+      }
+      await new Promise(r => setTimeout(r, intervalMs));
+    }
+
+    setPingTesting(false);
+  };
+
+  const stopPingTest = () => {
+    pingAbortControllerRef.current = true;
+    setPingTesting(false);
+  };
+
+  const getPingStats = () => {
+    if (pingHistory.length === 0) {
+      return { min: 0, max: 0, avg: 0, median: 0, jitter: 0 };
+    }
+    const min = Math.min(...pingHistory);
+    const max = Math.max(...pingHistory);
+    const avg = pingHistory.reduce((a, b) => a + b, 0) / pingHistory.length;
+    
+    const sorted = [...pingHistory].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    const median = sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+
+    let sumDiff = 0;
+    for (let i = 1; i < pingHistory.length; i++) {
+      sumDiff += Math.abs(pingHistory[i] - pingHistory[i - 1]);
+    }
+    const jitter = pingHistory.length > 1 ? sumDiff / (pingHistory.length - 1) : 0;
+
+    return { min, max, avg, median, jitter };
+  };
+
+  const { min, max, avg, median, jitter } = getPingStats();
 
   const handleButtonPress = () => {
     if (isTesting) {
@@ -534,6 +628,15 @@ export default function InternetScreen() {
           <>
             <Speedometer animatedPercent={animatedPercent} animatedNeedlePercent={animatedNeedlePercent} />
 
+            {/* Live testing status indicator */}
+            {isTesting && (
+              <Text style={styles.runningStatusText}>
+                {statusText === 'Testing Download...' ? 'Testing download speed...' : 
+                 statusText === 'Testing Upload...' ? 'Testing upload speed...' : 
+                 statusText === 'Testing Ping...' ? 'Testing network latency...' : statusText}
+              </Text>
+            )}
+
             <View style={styles.actionContainer}>
               <TouchableOpacity 
                 style={styles.testButtonWrapper} 
@@ -568,18 +671,10 @@ export default function InternetScreen() {
 
               <View style={styles.statsGrid}>
                 <View style={styles.statBox}>
-                  <MaterialCommunityIcons name="speedometer" size={24} color="#aaa" />
-                  <Text style={styles.statLabel}>Ping</Text>
-                  <Text style={styles.statValue}>
-                    {ping !== null ? `${ping} ms` : '--'}
-                  </Text>
-                </View>
-                
-                <View style={styles.statBox}>
                   <Feather name="arrow-down" size={24} color="#2ecc71" />
                   <Text style={styles.statLabel}>Download</Text>
                   <Text style={styles.statValue}>
-                    {downloadSpeed !== null ? downloadSpeed.toFixed(2) : '--'}
+                    {downloadSpeed !== null ? `${downloadSpeed.toFixed(2)} Mbps` : '--'}
                   </Text>
                 </View>
 
@@ -587,9 +682,106 @@ export default function InternetScreen() {
                   <Feather name="arrow-up" size={24} color="#e74c3c" />
                   <Text style={styles.statLabel}>Upload</Text>
                   <Text style={styles.statValue}>
-                    {uploadSpeed !== null ? uploadSpeed.toFixed(2) : '--'}
+                    {uploadSpeed !== null ? `${uploadSpeed.toFixed(2)} Mbps` : '--'}
                   </Text>
                 </View>
+              </View>
+            </View>
+
+            {/* Spacer */}
+            <View style={{ height: 20 }} />
+
+            {/* Ping Diagnostics Card */}
+            <View style={styles.metricsCard}>
+              <View style={styles.providerRow}>
+                <View style={[styles.providerIcon, { backgroundColor: 'rgba(52, 152, 219, 0.1)' }]}>
+                  <MaterialIcons name="network-check" size={24} color="#3498db" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.providerTitle}>Ping Diagnostics</Text>
+                  <Text style={styles.providerSubtitle}>Live Latency & Jitter Analysis</Text>
+                </View>
+              </View>
+
+              <View style={styles.divider} />
+
+              {pingTimeText ? (
+                <Text style={styles.pingMetaText}>{pingTimeText}</Text>
+              ) : null}
+
+              {/* Statistics row */}
+              <View style={styles.pingStatsRow}>
+                <View style={styles.pingStatItem}>
+                  <Text style={styles.pingStatLabel}>min</Text>
+                  <Text style={styles.pingStatValue}>{min > 0 ? `${min.toFixed(0)} ms` : '--'}</Text>
+                </View>
+                <View style={styles.pingStatItem}>
+                  <Text style={styles.pingStatLabel}>avg</Text>
+                  <Text style={styles.pingStatValue}>{avg > 0 ? `${avg.toFixed(1)} ms` : '--'}</Text>
+                </View>
+                <View style={styles.pingStatItem}>
+                  <Text style={styles.pingStatLabel}>max</Text>
+                  <Text style={styles.pingStatValue}>{max > 0 ? `${max.toFixed(0)} ms` : '--'}</Text>
+                </View>
+                <View style={[styles.pingStatItem, styles.medianHighlight]}>
+                  <Text style={[styles.pingStatLabel, { color: '#fff' }]}>median</Text>
+                  <Text style={[styles.pingStatValue, { color: '#fff', fontWeight: 'bold' }]}>{median > 0 ? `${median.toFixed(1)} ms` : '--'}</Text>
+                </View>
+                <View style={styles.pingStatItem}>
+                  <Text style={styles.pingStatLabel}>jitter</Text>
+                  <Text style={styles.pingStatValue}>{jitter > 0 ? `${jitter.toFixed(1)} ms` : '--'}</Text>
+                </View>
+              </View>
+
+              {/* Chart container */}
+              <View style={styles.pingChartContainer}>
+                <Svg width={graphWidth} height={120}>
+                  {/* Grid Lines */}
+                  <Line x1={0} y1={30} x2={graphWidth} y2={30} stroke="rgba(255, 255, 255, 0.05)" strokeWidth={1} />
+                  <Line x1={0} y1={60} x2={graphWidth} y2={60} stroke="rgba(255, 255, 255, 0.05)" strokeWidth={1} />
+                  <Line x1={0} y1={90} x2={graphWidth} y2={90} stroke="rgba(255, 255, 255, 0.05)" strokeWidth={1} />
+                  
+                  {/* Vertical lines */}
+                  {Array.from({ length: 10 }).map((_, idx) => {
+                    const x = (idx / 9) * graphWidth;
+                    return (
+                      <Line key={idx} x1={x} y1={0} x2={x} y2={120} stroke="rgba(255, 255, 255, 0.03)" strokeWidth={1} />
+                    );
+                  })}
+
+                  {/* Draw Ping Curve */}
+                  {pingHistory.length > 0 && (
+                    <Path
+                      d={(() => {
+                        const maxVal = Math.max(100, max * 1.2);
+                        return pingHistory.map((val, idx) => {
+                          const x = (idx / Math.max(60, pingHistory.length)) * graphWidth;
+                          const y = 120 - (val / maxVal) * 110;
+                          return `${idx === 0 ? 'M' : 'L'} ${x} ${y}`;
+                        }).join(' ');
+                      })()}
+                      fill="none"
+                      stroke="#e74c3c"
+                      strokeWidth={2}
+                    />
+                  )}
+                </Svg>
+              </View>
+
+              {/* Button wrapper */}
+              <View style={{ alignItems: 'center', marginTop: 16 }}>
+                <TouchableOpacity
+                  style={[styles.pingTestButton, pingTesting && styles.pingTestButtonActive]}
+                  onPress={pingTesting ? stopPingTest : startPingTest}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.buttonContent}>
+                    <Feather name={pingTesting ? "square" : "play"} size={16} color="#fff" style={{ marginRight: 6 }} />
+                    <Text style={styles.pingButtonText}>
+                      {pingTesting ? 'Stop Diagnostic' : 'Start Ping Test'}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
               </View>
             </View>
           </>
@@ -606,7 +798,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   container: {
-    paddingVertical: 16,
+    paddingTop: 16,
+    paddingBottom: 100,
     paddingHorizontal: 16,
     alignItems: 'center',
   },
@@ -747,6 +940,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
+  runningStatusText: {
+    color: '#8e44ad',
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 12,
+    textAlign: 'center',
+    letterSpacing: 0.5,
+  },
   actionContainer: {
     marginVertical: 24,
     width: '100%',
@@ -841,6 +1042,67 @@ const styles = StyleSheet.create({
   statValue: {
     color: '#fff',
     fontSize: 18,
+    fontWeight: 'bold',
+  },
+  pingMetaText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 12,
+  },
+  pingStatsRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 12,
+  },
+  pingStatItem: {
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+    borderRadius: 6,
+  },
+  medianHighlight: {
+    backgroundColor: '#38BCBC',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  pingStatLabel: {
+    color: '#aaa',
+    fontSize: 11,
+    marginBottom: 2,
+  },
+  pingStatValue: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  pingChartContainer: {
+    height: 130,
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+    padding: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pingTestButton: {
+    backgroundColor: '#3498db',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pingTestButtonActive: {
+    backgroundColor: '#c0392b',
+  },
+  pingButtonText: {
+    color: '#fff',
+    fontSize: 14,
     fontWeight: 'bold',
   },
 });
