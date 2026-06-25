@@ -20,6 +20,7 @@ import android.app.usage.NetworkStats
 import android.app.usage.NetworkStatsManager
 import android.net.ConnectivityManager
 import android.net.TrafficStats
+import android.telephony.TelephonyManager
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
@@ -139,8 +140,8 @@ class BatteryInfoModule : Module() {
       }
     }
 
-    Function("getNetworkUsageSinceMidnight") {
-      val context = appContext.reactContext ?: return@Function emptyList<Map<String, Any>>()
+    AsyncFunction("getNetworkUsageSinceMidnight") {
+      val context = appContext.reactContext ?: return@AsyncFunction emptyList<Map<String, Any>>()
       val nsm = context.getSystemService(Context.NETWORK_STATS_SERVICE) as NetworkStatsManager
       
       val calendar = Calendar.getInstance()
@@ -214,11 +215,11 @@ class BatteryInfoModule : Module() {
       }
       
       result.sortByDescending { it["totalBytes"] as Long }
-      return@Function result
+      return@AsyncFunction result
     }
 
-    Function("getLiveTrafficStats") {
-      val context = appContext.reactContext ?: return@Function emptyList<Map<String, Any>>()
+    AsyncFunction("getLiveTrafficStats") {
+      val context = appContext.reactContext ?: return@AsyncFunction emptyList<Map<String, Any>>()
       val pm = context.packageManager
       
       val installedApps = pm.getInstalledApplications(PackageManager.GET_META_DATA)
@@ -251,7 +252,21 @@ class BatteryInfoModule : Module() {
               }
           }
       }
-      return@Function result
+      return@AsyncFunction result
+    }
+
+    AsyncFunction("getNetworkProvider") {
+      val context = appContext.reactContext ?: return@AsyncFunction "Unknown"
+      try {
+          val tm = context.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
+          val operatorName = tm.networkOperatorName
+          if (operatorName.isNullOrBlank()) {
+              return@AsyncFunction "Wi-Fi"
+          }
+          return@AsyncFunction operatorName
+      } catch (e: Exception) {
+          return@AsyncFunction "Unknown"
+      }
     }
   }
 }

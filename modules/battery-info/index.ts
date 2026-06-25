@@ -21,12 +21,16 @@ export function requestUsagePermission(): void {
   BatteryInfoModule.requestUsagePermission();
 }
 
-export function getNetworkUsageSinceMidnight(): NetworkUsageStat[] {
-  return BatteryInfoModule.getNetworkUsageSinceMidnight();
+export async function getNetworkUsageSinceMidnight(): Promise<NetworkUsageStat[]> {
+  return await BatteryInfoModule.getNetworkUsageSinceMidnight();
 }
 
-export function getLiveTrafficStats(): NetworkUsageStat[] {
-  return BatteryInfoModule.getLiveTrafficStats();
+export async function getLiveTrafficStats(): Promise<NetworkUsageStat[]> {
+  return await BatteryInfoModule.getLiveTrafficStats();
+}
+
+export async function getNetworkProvider(): Promise<string> {
+  return await BatteryInfoModule.getNetworkProvider();
 }
 
 export function addBatteryStateListener(listener: (event: BatteryState) => void) {

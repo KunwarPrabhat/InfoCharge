@@ -9,8 +9,9 @@ declare class BatteryInfoModule extends NativeModule<{
   stopMonitoring(): void;
   hasUsagePermission(): boolean;
   requestUsagePermission(): void;
-  getNetworkUsageSinceMidnight(): NetworkUsageStat[];
-  getLiveTrafficStats(): NetworkUsageStat[];
+  getNetworkUsageSinceMidnight(): Promise<NetworkUsageStat[]>;
+  getLiveTrafficStats(): Promise<NetworkUsageStat[]>;
+  getNetworkProvider(): Promise<string>;
 }
 
 export default requireNativeModule<BatteryInfoModule>('BatteryInfo');
