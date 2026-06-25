@@ -31,27 +31,40 @@ export default function DashboardScreen() {
   const lastChargeRef = useRef<{time: number, capacity: number} | null>(null);
 
   useEffect(() => {
+    let isMounted = true;
     if (Platform.OS === 'android') {
       try {
         setBatteryState(BatteryInfo.getBatteryState());
         BatteryInfo.startMonitoring();
         
         const subscription = BatteryInfo.addBatteryStateListener((state) => {
-          setBatteryState(state);
+          if (isMounted) {
+            setBatteryState(state);
+          }
         });
 
         const intervalId = setInterval(() => {
-          setBatteryState(BatteryInfo.getBatteryState());
+          if (isMounted) {
+            setBatteryState(BatteryInfo.getBatteryState());
+          }
         }, 1000);
 
         const settingsInterval = setInterval(async () => {
-          setSettings(await StorageService.getSettings());
+          const s = await StorageService.getSettings();
+          if (isMounted) {
+            setSettings(s);
+          }
         }, 5000);
 
-        StorageService.getSettings().then(setSettings);
+        StorageService.getSettings().then((s) => {
+          if (isMounted) {
+            setSettings(s);
+          }
+        });
         Notifications.requestPermissionsAsync();
 
         return () => {
+          isMounted = false;
           clearInterval(intervalId);
           clearInterval(settingsInterval);
           subscription.remove();

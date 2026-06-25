@@ -56,9 +56,9 @@ export default function Meter({ currentmA, statusText, isCharging }: MeterProps)
     });
   }, [currentmA]);
 
-  const size = 260; // Slightly smaller for a more refined look
+  const size = 280; // Increased to prevent the 1.5x stroke width glow from getting clipped at the boundaries
   const strokeWidth = 24; // Thicker, bolder stroke
-  const radius = (size - strokeWidth) / 2;
+  const radius = (260 - strokeWidth) / 2; // Maintain original visual scale (based on 260)
   const circumference = 2 * Math.PI * radius;
 
   const animatedCircleProps = useAnimatedProps(() => {

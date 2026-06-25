@@ -1,50 +1,60 @@
-# Welcome to your Expo app 👋
+# InfoCharge
+Download the latest version from the release section.
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+InfoCharge is a comprehensive system utility application for Android built with React Native and Expo. It provides real-time monitoring and diagnostics for your device's battery health and network performance.
 
-## Get started
+## Features
 
-1. Install dependencies
+### Battery Dashboard
+- Real-time current monitoring (mA) indicating charging or discharging rates.
+- Dynamic gauge meter with smooth animations reflecting current power draw.
+- Time estimations for full charge or complete discharge based on historical consumption rates.
+- Detailed battery statistics: Level, Capacity, Voltage, Power, Temperature, Health, Plug Type, and Cycle Count.
+- Background alarms and notifications for configurable charge level targets and temperature warnings.
 
+### Network Diagnostics
+- Overall daily data usage tracking per application.
+- Speed test feature to measure actual download and upload bandwidth.
+- Live ping diagnostic test calculating minimum, average, maximum, median, and jitter latency.
+- Dynamic graphing to visualize ping stability over time.
+
+## Technologies Used
+
+- React Native & Expo: Core application framework and tooling.
+- React Native Reanimated & React Native SVG: For smooth, performant dashboard animations and gauges.
+- Custom Android Native Modules: Written in Kotlin to interface directly with Android system APIs (BatteryManager, TrafficStats, NetworkStatsManager) for highly accurate and low-latency telemetry data.
+
+## Project Setup
+
+### Requirements
+- Node.js (v18 or newer recommended)
+- Android Studio / Android SDK (for native builds)
+
+### Installation
+1. Install dependencies:
    ```bash
    npm install
    ```
 
-2. Start the app
-
+2. Because the application uses custom native Android modules, you must prebuild the project before running it for the first time, or after making native code changes:
    ```bash
-   npx expo start
+   npx expo prebuild --clean
    ```
 
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
+### Running Locally
+To run the application directly on an attached physical Android device or emulator:
 ```bash
-npm run reset-project
+npx expo run:android
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+### Building for Production
+To build a standalone Release APK locally:
+```bash
+cd android
+./gradlew assembleRelease
+```
 
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## Permissions
+The application requests the following permissions to function correctly:
+- Notifications: To alert the user of temperature warnings and charge limits.
+- Usage Access (AppOps): To calculate per-app data consumption statistics.

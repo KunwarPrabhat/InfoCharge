@@ -234,6 +234,7 @@ export default function InternetScreen() {
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const isTestingRef = useRef(false);
+  const isMountedRef = useRef(true);
 
   const animateToSpeed = useCallback((speed: number, duration = 300, isLinear = false) => {
     const targetPercent = getPercent(speed);
@@ -255,12 +256,16 @@ export default function InternetScreen() {
 
   const checkPermissionAndFetchOverall = useCallback(async () => {
     const granted = hasUsagePermission();
-    setHasPermission(granted);
+    if (isMountedRef.current) {
+      setHasPermission(granted);
+    }
     if (granted && activeTab === 'Overall') {
       const stats = await getNetworkUsageSinceMidnight();
       const total = stats.reduce((sum, app) => sum + (app.totalBytes || 0), 0);
-      setTotalOverallBytes(total);
-      setOverallData(stats.slice(0, 30)); 
+      if (isMountedRef.current) {
+        setTotalOverallBytes(total);
+        setOverallData(stats.slice(0, 30));
+      }
     }
   }, [activeTab]);
 
@@ -277,18 +282,25 @@ export default function InternetScreen() {
   }, [isFocused, checkPermissionAndFetchOverall]);
 
   useEffect(() => {
+    isMountedRef.current = true;
     const fetchProvider = async () => {
       try {
         const prov = await getNetworkProvider();
-        setProvider(prov);
+        if (isMountedRef.current) {
+          setProvider(prov);
+        }
       } catch(e) {
-        setProvider('Unknown Network');
+        if (isMountedRef.current) {
+          setProvider('Unknown Network');
+        }
       }
     };
     fetchProvider();
     
     return () => {
+      isMountedRef.current = false;
       stopTest();
+      stopPingTest();
     };
   }, []);
 
@@ -320,12 +332,14 @@ export default function InternetScreen() {
 
   const stopTest = () => {
     isTestingRef.current = false;
-    setIsTesting(false);
+    if (isMountedRef.current) {
+      setIsTesting(false);
+      setStatusText('Test Now');
+    }
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
-    setStatusText('Test Now');
     animateToSpeed(0, 300);
   };
 
@@ -422,38 +436,45 @@ export default function InternetScreen() {
 
   const startTest = async () => {
     isTestingRef.current = true;
-    setIsTesting(true);
-    setDownloadSpeed(null);
-    setUploadSpeed(null);
+    if (isMountedRef.current) {
+      setIsTesting(true);
+      setDownloadSpeed(null);
+      setUploadSpeed(null);
+      setStatusText('Testing Download...');
+    }
     animateToSpeed(0, 0); // instantly reset needle to 0
     
-    setStatusText('Testing Download...');
     const dSpeed = await runNativeSpeedTest('download', 15000); 
-    if (!isTestingRef.current) return;
+    if (!isTestingRef.current || !isMountedRef.current) return;
     
     // Reset needle to 0 smoothly before upload test
     animateToSpeed(0, 400);
     await new Promise(r => setTimeout(r, 500));
-    if (!isTestingRef.current) return;
+    if (!isTestingRef.current || !isMountedRef.current) return;
     
-    setStatusText('Testing Upload...');
+    if (isMountedRef.current) {
+      setStatusText('Testing Upload...');
+    }
     isTestingRef.current = true; // reset true for next phase
     const uSpeed = await runNativeSpeedTest('upload', 10000);
-    if (!isTestingRef.current) return;
+    if (!isTestingRef.current || !isMountedRef.current) return;
     animateToSpeed(0, 400); // return to 0 smoothly at the end
     
     // Set all results at the very end of the test!
-    setDownloadSpeed(dSpeed);
-    setUploadSpeed(uSpeed);
-    
-    setStatusText('Test Complete');
-    setIsTesting(false);
-    isTestingRef.current = false;
+    if (isMountedRef.current) {
+      setDownloadSpeed(dSpeed);
+      setUploadSpeed(uSpeed);
+      setStatusText('Test Complete');
+      setIsTesting(false);
+      isTestingRef.current = false;
+    }
   };
 
   const startPingTest = async () => {
-    setPingTesting(true);
-    setPingHistory([]);
+    if (isMountedRef.current) {
+      setPingTesting(true);
+      setPingHistory([]);
+    }
     pingAbortControllerRef.current = false;
 
     const now = new Date();
@@ -462,7 +483,9 @@ export default function InternetScreen() {
     try {
       netProvider = await getNetworkProvider();
     } catch(e) {}
-    setPingTimeText(`${formattedTime}  ${netProvider}:`);
+    if (isMountedRef.current) {
+      setPingTimeText(`${formattedTime}  ${netProvider}:`);
+    }
 
     const targetHost = "8.8.8.8";
     const targetPort = 53;
@@ -471,7 +494,9 @@ export default function InternetScreen() {
     for (let i = 0; i < 3; i++) {
       await measurePingNative(targetHost, targetPort);
       if (pingAbortControllerRef.current) {
-        setPingTesting(false);
+        if (isMountedRef.current) {
+          setPingTesting(false);
+        }
         return;
       }
       await new Promise(r => setTimeout(r, 100));
@@ -483,18 +508,22 @@ export default function InternetScreen() {
 
     while (Date.now() - startTime < duration && !pingAbortControllerRef.current) {
       const p = await measurePingNative(targetHost, targetPort);
-      if (p >= 0 && !pingAbortControllerRef.current) {
+      if (p >= 0 && !pingAbortControllerRef.current && isMountedRef.current) {
         setPingHistory(prev => [...prev, p]);
       }
       await new Promise(r => setTimeout(r, intervalMs));
     }
 
-    setPingTesting(false);
+    if (isMountedRef.current) {
+      setPingTesting(false);
+    }
   };
 
   const stopPingTest = () => {
     pingAbortControllerRef.current = true;
-    setPingTesting(false);
+    if (isMountedRef.current) {
+      setPingTesting(false);
+    }
   };
 
   const getPingStats = () => {

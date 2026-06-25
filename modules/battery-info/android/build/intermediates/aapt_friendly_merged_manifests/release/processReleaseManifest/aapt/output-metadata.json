@@ -5,7 +5,7 @@
     "kind": "Directory"
   },
   "applicationId": "expo.modules.batteryinfo",
-  "variantName": "debug",
+  "variantName": "release",
   "elements": [
     {
       "type": "SINGLE",
