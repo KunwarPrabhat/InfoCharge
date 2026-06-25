@@ -4,7 +4,7 @@
     "slug": "InfoCharge",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/android/ic_launcher-web.png",
     "scheme": "infocharge",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -15,7 +15,7 @@
       "permissions": ["android.permission.PACKAGE_USAGE_STATS", "android.permission.QUERY_ALL_PACKAGES", "android.permission.READ_PHONE_STATE"],
       "adaptiveIcon": {
         "backgroundColor": "#0A0A0A",
-        "foregroundImage": "./assets/images/icon.png"
+        "foregroundImage": "./assets/android/ic_launcher-web.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
@@ -23,14 +23,14 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/icon.png"
+      "favicon": "./assets/android/ic_launcher-web.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/icon.png",
+          "image": "./assets/android/ic_launcher-web.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",

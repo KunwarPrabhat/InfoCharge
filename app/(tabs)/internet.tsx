@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { StyleSheet, ScrollView, Text, View, TouchableOpacity, Animated, Image, AppState, AppStateStatus } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Path, Defs, LinearGradient, Stop, Circle, Line, Text as SvgText, Rect } from 'react-native-svg';
+import Svg, { Path, Defs, LinearGradient, Stop, Circle, Line, Text as SvgText } from 'react-native-svg';
 import { Feather, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { useIsFocused } from '@react-navigation/native';
 import { 
@@ -9,6 +9,7 @@ import {
   hasUsagePermission, 
   requestUsagePermission, 
   getNetworkUsageSinceMidnight, 
+  getLiveTrafficStats,
   NetworkUsageStat 
 } from '@/modules/battery-info';
 
@@ -153,8 +154,10 @@ export default function InternetScreen() {
   const [statusText, setStatusText] = useState('Test Now');
   
   const animatedValue = useRef(new Animated.Value(0)).current;
-  const gradientShiftX = useRef(new Animated.Value(0)).current;
   const [displaySpeed, setDisplaySpeed] = useState(0);
+
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const isTestingRef = useRef(false);
 
   const checkPermissionAndFetchOverall = useCallback(async () => {
     const granted = hasUsagePermission();
@@ -180,11 +183,10 @@ export default function InternetScreen() {
   }, [isFocused, checkPermissionAndFetchOverall]);
 
   useEffect(() => {
-    Animated.spring(animatedValue, {
+    Animated.timing(animatedValue, {
       toValue: currentSpeed,
+      duration: 500,
       useNativeDriver: false,
-      friction: 7,
-      tension: 50,
     }).start();
   }, [currentSpeed]);
 
@@ -196,21 +198,6 @@ export default function InternetScreen() {
   }, []);
 
   useEffect(() => {
-    if (isTesting) {
-      Animated.loop(
-        Animated.timing(gradientShiftX, {
-          toValue: -200, 
-          duration: 1000,
-          useNativeDriver: true,
-        })
-      ).start();
-    } else {
-      gradientShiftX.stopAnimation();
-      gradientShiftX.setValue(0);
-    }
-  }, [isTesting]);
-
-  useEffect(() => {
     const fetchProvider = async () => {
       try {
         const prov = await getNetworkProvider();
@@ -220,6 +207,10 @@ export default function InternetScreen() {
       }
     };
     fetchProvider();
+    
+    return () => {
+      stopTest();
+    };
   }, []);
 
   const measurePing = async () => {
@@ -234,73 +225,102 @@ export default function InternetScreen() {
     }
   };
 
-  const runSpeedTest = (url: string, method: string, payload: any = null) => {
-    return new Promise<number>((resolve) => {
-      const xhr = new XMLHttpRequest();
-      const startTime = Date.now();
-      let lastTime = startTime;
-      let lastLoaded = 0;
+  const stopTest = () => {
+    isTestingRef.current = false;
+    setIsTesting(false);
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setStatusText('Test Now');
+    setCurrentSpeed(0);
+  };
+
+  const runNativeSpeedTest = (type: 'download' | 'upload') => {
+    return new Promise<number>(async (resolve) => {
       let speeds: number[] = [];
-      let isFinished = false;
+      const startTime = Date.now();
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
 
-      xhr.open(method, `${url}?t=${Date.now()}`, true);
+      const runFetchLoop = async () => {
+        while (isTestingRef.current) {
+          try {
+            if (type === 'download') {
+              await fetch(`https://speed.cloudflare.com/__down?bytes=50000000&t=${Date.now()}`, { signal: abortController.signal, cache: 'no-store' });
+            } else {
+              await fetch(`https://speed.cloudflare.com/__up?t=${Date.now()}`, { 
+                method: 'POST', 
+                body: '0'.repeat(10000000), // 10MB
+                headers: { 'Content-Type': 'text/plain' },
+                signal: abortController.signal 
+              });
+            }
+          } catch(e) { break; }
+        }
+      };
+
+      runFetchLoop();
+
+      let lastTime = startTime;
+      let lastRx = 0;
+      let lastTx = 0;
       
-      const onProgress = (e: ProgressEvent) => {
-        if (isFinished) return;
-        const now = Date.now();
-        const totalElapsed = now - startTime;
-        const delta = now - lastTime;
+      try {
+        const initialStats = await getLiveTrafficStats();
+        lastRx = initialStats.reduce((sum, app) => sum + app.rxBytes, 0);
+        lastTx = initialStats.reduce((sum, app) => sum + app.txBytes, 0);
+      } catch(e) {}
 
-        if (delta > 200) { 
-          const bytes = e.loaded - lastLoaded;
+      const interval = setInterval(async () => {
+        if (!isTestingRef.current) {
+          clearInterval(interval);
+          resolve(0);
+          return;
+        }
+
+        const now = Date.now();
+        const delta = now - lastTime;
+        
+        try {
+          const stats = await getLiveTrafficStats();
+          const currentRx = stats.reduce((sum, app) => sum + app.rxBytes, 0);
+          const currentTx = stats.reduce((sum, app) => sum + app.txBytes, 0);
+          
+          const rxDiff = Math.max(0, currentRx - lastRx);
+          const txDiff = Math.max(0, currentTx - lastTx);
+          
+          const bytes = type === 'download' ? rxDiff : txDiff;
           const bits = bytes * 8;
           const mbps = (bits / (delta / 1000)) / 1000000;
           
-          if (mbps >= 0) {
+          if (mbps > 0) {
             speeds.push(mbps);
             setCurrentSpeed(mbps);
           }
           
+          lastRx = currentRx;
+          lastTx = currentTx;
           lastTime = now;
-          lastLoaded = e.loaded;
-        }
-
-        if (totalElapsed >= 10000) { 
-          isFinished = true;
-          xhr.abort();
+        } catch(e) {}
+        
+        if (now - startTime >= 10000) {
+          isTestingRef.current = false;
+          clearInterval(interval);
+          if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+          }
+          
           speeds.sort((a, b) => b - a);
-          const topSpeeds = speeds.slice(0, Math.max(1, Math.floor(speeds.length * 0.7)));
-          const avg = topSpeeds.length > 0 ? topSpeeds.reduce((a,b)=>a+b,0)/topSpeeds.length : 0;
-          resolve(avg);
+          const topSpeeds = speeds.slice(0, Math.max(1, Math.floor(speeds.length * 0.8)));
+          resolve(topSpeeds.length > 0 ? topSpeeds.reduce((a,b)=>a+b,0)/topSpeeds.length : 0);
         }
-      };
-
-      if (method === 'GET') {
-        xhr.responseType = 'arraybuffer';
-        xhr.onprogress = onProgress;
-      } else {
-        xhr.upload.onprogress = onProgress;
-      }
-
-      xhr.onload = () => {
-        if (isFinished) return;
-        isFinished = true;
-        const avg = speeds.length > 0 ? speeds.reduce((a,b)=>a+b,0)/speeds.length : 0;
-        resolve(avg);
-      };
-      
-      xhr.onerror = () => {
-        if (!isFinished) {
-          isFinished = true;
-          resolve(0);
-        }
-      };
-      
-      xhr.send(payload);
+      }, 500);
     });
   };
 
   const startTest = async () => {
+    isTestingRef.current = true;
     setIsTesting(true);
     setDownloadSpeed(null);
     setUploadSpeed(null);
@@ -308,20 +328,32 @@ export default function InternetScreen() {
     setPing(null);
     
     await measurePing();
+    if (!isTestingRef.current) return;
     
     setStatusText('Testing Download...');
-    const dSpeed = await runSpeedTest('https://speed.cloudflare.com/__down?bytes=50000000', 'GET'); 
+    const dSpeed = await runNativeSpeedTest('download'); 
+    if (!isTestingRef.current) return;
     setDownloadSpeed(dSpeed);
     setCurrentSpeed(0);
     
     setStatusText('Testing Upload...');
-    const payload = new Float32Array(5000000); 
-    const uSpeed = await runSpeedTest('https://speed.cloudflare.com/__up', 'POST', payload);
+    isTestingRef.current = true; // reset true for next phase
+    const uSpeed = await runNativeSpeedTest('upload');
+    if (!isTestingRef.current) return;
     setUploadSpeed(uSpeed);
     setCurrentSpeed(uSpeed);
     
-    setStatusText('Test Now');
+    setStatusText('Test Complete');
     setIsTesting(false);
+    isTestingRef.current = false;
+  };
+
+  const handleButtonPress = () => {
+    if (isTesting) {
+      stopTest();
+    } else {
+      startTest();
+    }
   };
 
   if (!hasPermission && activeTab === 'Overall') {
@@ -329,16 +361,16 @@ export default function InternetScreen() {
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.tabContainer}>
           <TouchableOpacity 
-            style={[styles.tabButton, activeTab === 'Overall' && styles.activeTabButton]} 
+            style={[styles.tabButton, styles.activeTabButton]} 
             onPress={() => setActiveTab('Overall')}
           >
-            <Text style={[styles.tabText, activeTab === 'Overall' && styles.activeTabText]}>Overall</Text>
+            <Text style={[styles.tabText, styles.activeTabText]}>Overall</Text>
           </TouchableOpacity>
           <TouchableOpacity 
-            style={[styles.tabButton, activeTab === 'Speed Test' && styles.activeTabButton]} 
+            style={styles.tabButton} 
             onPress={() => setActiveTab('Speed Test')}
           >
-            <Text style={[styles.tabText, activeTab === 'Speed Test' && styles.activeTabText]}>Speed Test</Text>
+            <Text style={styles.tabText}>Speed Test</Text>
           </TouchableOpacity>
         </View>
 
@@ -427,29 +459,17 @@ export default function InternetScreen() {
             <View style={styles.actionContainer}>
               <TouchableOpacity 
                 style={styles.testButtonWrapper} 
-                onPress={startTest}
-                disabled={isTesting}
+                onPress={handleButtonPress}
                 activeOpacity={0.8}
               >
-                <View style={[styles.testButton, isTesting && styles.testButtonDisabled]}>
-                  {isTesting && (
-                    <Animated.View style={[styles.gradientBg, { transform: [{ translateX: gradientShiftX }] }]}>
-                      <Svg height="100%" width="400" viewBox="0 0 400 60" preserveAspectRatio="none">
-                        <Defs>
-                          <LinearGradient id="btnGrad" x1="0" y1="0" x2="1" y2="0">
-                            <Stop offset="0" stopColor="#00d2ff" stopOpacity="0.8" />
-                            <Stop offset="0.5" stopColor="#3a7bd5" stopOpacity="0.8" />
-                            <Stop offset="1" stopColor="#8e44ad" stopOpacity="0.8" />
-                          </LinearGradient>
-                        </Defs>
-                        <Rect width="400" height="60" fill="url(#btnGrad)" />
-                      </Svg>
-                    </Animated.View>
-                  )}
-                  
+                <View style={[styles.testButton, isTesting && styles.testButtonActive]}>
                   <View style={styles.buttonContent}>
-                    {!isTesting && <Feather name="play" size={20} color="#fff" style={{marginRight: 8}} />}
-                    <Text style={styles.testButtonText}>{statusText}</Text>
+                    {isTesting ? (
+                      <Feather name="square" size={20} color="#fff" style={{marginRight: 8}} />
+                    ) : (
+                      <Feather name="play" size={20} color="#fff" style={{marginRight: 8}} />
+                    )}
+                    <Text style={styles.testButtonText}>{isTesting ? 'Stop Test' : statusText}</Text>
                   </View>
                 </View>
               </TouchableOpacity>
@@ -616,7 +636,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   button: {
-    backgroundColor: '#3498db',
+    backgroundColor: '#8e44ad',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 12,
@@ -635,18 +655,18 @@ const styles = StyleSheet.create({
   },
   meterTextContainer: {
     position: 'absolute',
-    bottom: 25,
+    bottom: 30,
     alignItems: 'center',
   },
   speedValueText: {
     color: '#fff',
-    fontSize: 48,
+    fontSize: 36,
     fontWeight: '300',
     letterSpacing: -1,
   },
   speedUnitText: {
     color: '#aaa',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '500',
   },
   actionContainer: {
@@ -656,7 +676,7 @@ const styles = StyleSheet.create({
   },
   testButtonWrapper: {
     borderRadius: 30,
-    shadowColor: '#00d2ff',
+    shadowColor: '#8e44ad',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 12,
@@ -664,7 +684,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   testButton: {
-    backgroundColor: '#3498db',
+    backgroundColor: '#8e44ad',
     width: 200,
     height: 56,
     borderRadius: 30,
@@ -672,17 +692,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  testButtonDisabled: {
-    backgroundColor: '#2c3e50',
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  gradientBg: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 400,
+  testButtonActive: {
+    backgroundColor: '#c0392b',
+    shadowColor: '#e74c3c',
   },
   buttonContent: {
     flexDirection: 'row',
@@ -713,7 +725,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: 'rgba(0, 210, 255, 0.1)',
+    backgroundColor: 'rgba(142, 68, 173, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 16,
