@@ -255,6 +255,24 @@ class BatteryInfoModule : Module() {
       return@AsyncFunction result
     }
 
+    Function("getAppRxBytes") {
+      val uid = android.os.Process.myUid()
+      val bytes = TrafficStats.getUidRxBytes(uid)
+      if (bytes == TrafficStats.UNSUPPORTED.toLong()) {
+        return@Function TrafficStats.getTotalRxBytes()
+      }
+      return@Function bytes
+    }
+
+    Function("getAppTxBytes") {
+      val uid = android.os.Process.myUid()
+      val bytes = TrafficStats.getUidTxBytes(uid)
+      if (bytes == TrafficStats.UNSUPPORTED.toLong()) {
+        return@Function TrafficStats.getTotalTxBytes()
+      }
+      return@Function bytes
+    }
+
     AsyncFunction("getNetworkProvider") {
       val context = appContext.reactContext ?: return@AsyncFunction "Unknown"
       try {

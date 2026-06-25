@@ -14,7 +14,7 @@
     "android": {
       "permissions": ["android.permission.PACKAGE_USAGE_STATS", "android.permission.QUERY_ALL_PACKAGES", "android.permission.READ_PHONE_STATE"],
       "adaptiveIcon": {
-        "backgroundColor": "#0A0A0A",
+        "backgroundColor": "#38BCBC",
         "foregroundImage": "./assets/android/ic_launcher-web.png"
       },
       "edgeToEdgeEnabled": true,
@@ -33,9 +33,11 @@
           "image": "./assets/android/ic_launcher-web.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
+          "backgroundColor": "#38BCBC",
+          "iconBackgroundColor": "#38BCBC",
           "dark": {
-            "backgroundColor": "#000000"
+            "backgroundColor": "#000000",
+            "iconBackgroundColor": "#38BCBC"
           }
         }
       ]

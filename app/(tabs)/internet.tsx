@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { StyleSheet, ScrollView, Text, View, TouchableOpacity, Animated, Image, AppState, AppStateStatus } from 'react-native';
+import { StyleSheet, ScrollView, Text, View, TouchableOpacity, Animated, Image, AppState, AppStateStatus, TextInput, Easing } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Defs, LinearGradient, Stop, Circle, Line, Text as SvgText } from 'react-native-svg';
 import { Feather, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
@@ -9,7 +9,8 @@ import {
   hasUsagePermission, 
   requestUsagePermission, 
   getNetworkUsageSinceMidnight, 
-  getLiveTrafficStats,
+  getAppRxBytes,
+  getAppTxBytes,
   NetworkUsageStat 
 } from '@/modules/battery-info';
 
@@ -30,13 +31,13 @@ const polarToCartesian = (centerX: number, centerY: number, radius: number, angl
   };
 };
 
-const describeArc = (x: number, y: number, radius: number, startAngle: number, endAngle: number) => {
-  const start = polarToCartesian(x, y, radius, endAngle);
-  const end = polarToCartesian(x, y, radius, startAngle);
+const describeArcForward = (x: number, y: number, radius: number, startAngle: number, endAngle: number) => {
+  const start = polarToCartesian(x, y, radius, startAngle);
+  const end = polarToCartesian(x, y, radius, endAngle);
   const largeArcFlag = endAngle - startAngle <= 180 ? '0' : '1';
   return [
     'M', start.x, start.y,
-    'A', radius, radius, 0, largeArcFlag, 0, end.x, end.y,
+    'A', radius, radius, 0, largeArcFlag, 1, end.x, end.y,
   ].join(' ');
 };
 
@@ -55,80 +56,146 @@ const getPercent = (val: number) => {
   return 1;
 };
 
-const Speedometer = ({ value }: { value: number }) => {
+const getSpeedFromPercent = (p: number) => {
+  if (p <= 0) return 0;
+  if (p >= 1) return 1000;
+  const scaledP = p * (labels.length - 1);
+  const index = Math.floor(scaledP);
+  const fraction = scaledP - index;
+  if (index >= labels.length - 1) return 1000;
+  const valStart = labels[index];
+  const valEnd = labels[index + 1];
+  return valStart + fraction * (valEnd - valStart);
+};
+
+const AnimatedPath = Animated.createAnimatedComponent(Path);
+
+const Speedometer = ({ 
+  animatedPercent, 
+  animatedNeedlePercent 
+}: { 
+  animatedPercent: Animated.Value; 
+  animatedNeedlePercent: Animated.Value; 
+}) => {
   const radius = 130;
   const strokeWidth = 24;
   const center = 150;
   const startAngle = -135;
   const endAngle = 135;
   const angleRange = endAngle - startAngle;
+  const ARC_LENGTH = 612.61; // 0.75 * 2 * Math.PI * 130
 
-  const percent = getPercent(value);
-  const currentAngle = startAngle + (percent * angleRange);
+  const textInputRef = useRef<TextInput>(null);
+
+  useEffect(() => {
+    const listener = animatedPercent.addListener(({ value }) => {
+      const speed = getSpeedFromPercent(value);
+      textInputRef.current?.setNativeProps({ text: speed.toFixed(1) });
+    });
+    return () => {
+      animatedPercent.removeListener(listener);
+    };
+  }, [animatedPercent]);
+
+  const arcPath = describeArcForward(center, center, radius, startAngle, endAngle);
+
+  const strokeDashoffset = animatedPercent.interpolate({
+    inputRange: [0, 1],
+    outputRange: [ARC_LENGTH, 0],
+    extrapolate: 'clamp',
+  });
+
+  const rotationInterpolate = animatedNeedlePercent.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['-135deg', '135deg'],
+    extrapolate: 'clamp',
+  });
 
   return (
     <View style={styles.meterContainer}>
-      <Svg width={300} height={300} viewBox="0 0 300 300">
-        <Defs>
-          <LinearGradient id="grad" x1="0" y1="1" x2="1" y2="0">
-            <Stop offset="0" stopColor="#00d2ff" stopOpacity="1" />
-            <Stop offset="0.5" stopColor="#3a7bd5" stopOpacity="1" />
-            <Stop offset="1" stopColor="#8e44ad" stopOpacity="1" />
-          </LinearGradient>
-        </Defs>
-        
-        <Path
-          d={describeArc(center, center, radius, startAngle, endAngle)}
-          stroke="rgba(255, 255, 255, 0.05)"
-          strokeWidth={strokeWidth}
-          fill="none"
-          strokeLinecap="round"
-        />
-        
-        {value > 0 && (
+      <View style={{ width: 300, height: 300 }}>
+        <Svg width={300} height={300} viewBox="0 0 300 300">
+          <Defs>
+            <LinearGradient id="grad" x1="0" y1="1" x2="1" y2="0">
+              <Stop offset="0" stopColor="#00d2ff" stopOpacity="1" />
+              <Stop offset="0.5" stopColor="#3a7bd5" stopOpacity="1" />
+              <Stop offset="1" stopColor="#8e44ad" stopOpacity="1" />
+            </LinearGradient>
+          </Defs>
+          
+          {/* Background arc */}
           <Path
-            d={describeArc(center, center, radius, startAngle, currentAngle)}
-            stroke="url(#grad)"
+            d={arcPath}
+            stroke="rgba(255, 255, 255, 0.05)"
             strokeWidth={strokeWidth}
             fill="none"
             strokeLinecap="round"
           />
-        )}
+          
+          {/* Progress arc */}
+          <AnimatedPath
+            d={arcPath}
+            stroke="url(#grad)"
+            strokeWidth={strokeWidth}
+            fill="none"
+            strokeLinecap="round"
+            strokeDasharray={`${ARC_LENGTH} ${ARC_LENGTH}`}
+            strokeDashoffset={strokeDashoffset}
+          />
 
-        {labels.map((val, index) => {
-          const valPercent = index / (labels.length - 1);
-          const valAngle = startAngle + (valPercent * angleRange);
-          const pos = polarToCartesian(center, center, radius - 35, valAngle);
-          return (
-            <SvgText
-              key={val}
-              x={pos.x}
-              y={pos.y + 4}
-              fill="#aaa"
-              fontSize="13"
-              fontWeight="bold"
-              textAnchor="middle"
-            >
-              {val}
-            </SvgText>
-          );
-        })}
+          {labels.map((val, index) => {
+            const valPercent = index / (labels.length - 1);
+            const valAngle = startAngle + (valPercent * angleRange);
+            const pos = polarToCartesian(center, center, radius - 35, valAngle);
+            return (
+              <SvgText
+                key={val}
+                x={pos.x}
+                y={pos.y + 4}
+                fill="#aaa"
+                fontSize="13"
+                fontWeight="bold"
+                textAnchor="middle"
+              >
+                {val}
+              </SvgText>
+            );
+          })}
+        </Svg>
 
-        <Circle cx={center} cy={center} r={6} fill="#fff" />
-        
-        <Line
-          x1={center}
-          y1={center}
-          x2={polarToCartesian(center, center, radius - 45, currentAngle).x}
-          y2={polarToCartesian(center, center, radius - 45, currentAngle).y}
-          stroke="#fff"
-          strokeWidth={4}
-          strokeLinecap="round"
-        />
-      </Svg>
+        {/* Overlay Needle Svg */}
+        <Animated.View
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              transform: [{ rotate: rotationInterpolate }]
+            }
+          ]}
+          pointerEvents="none"
+        >
+          <Svg width={300} height={300} viewBox="0 0 300 300">
+            <Circle cx={center} cy={center} r={6} fill="#fff" />
+            <Line
+              x1={center}
+              y1={center}
+              x2={center}
+              y2={center - (radius - 45)}
+              stroke="#fff"
+              strokeWidth={4}
+              strokeLinecap="round"
+            />
+          </Svg>
+        </Animated.View>
+      </View>
       
       <View style={styles.meterTextContainer}>
-        <Text style={styles.speedValueText}>{value.toFixed(2)}</Text>
+        <TextInput
+          ref={textInputRef}
+          underlineColorAndroid="transparent"
+          editable={false}
+          value="0.0"
+          style={styles.speedValueText}
+        />
         <View style={{flexDirection: 'row', alignItems: 'center'}}>
            <Feather name="arrow-down-circle" size={16} color="#00d2ff" style={{marginRight: 6}} />
            <Text style={styles.speedUnitText}>Mbps</Text>
@@ -147,17 +214,34 @@ export default function InternetScreen() {
 
   const [provider, setProvider] = useState<string>('Detecting...');
   const [isTesting, setIsTesting] = useState(false);
-  const [currentSpeed, setCurrentSpeed] = useState(0);
   const [downloadSpeed, setDownloadSpeed] = useState<number | null>(null);
   const [uploadSpeed, setUploadSpeed] = useState<number | null>(null);
   const [ping, setPing] = useState<number | null>(null);
   const [statusText, setStatusText] = useState('Test Now');
   
-  const animatedValue = useRef(new Animated.Value(0)).current;
-  const [displaySpeed, setDisplaySpeed] = useState(0);
+  const animatedPercent = useRef(new Animated.Value(0)).current;
+  const animatedNeedlePercent = useRef(new Animated.Value(0)).current;
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const isTestingRef = useRef(false);
+
+  const animateToSpeed = useCallback((speed: number, duration = 300) => {
+    const targetPercent = getPercent(speed);
+    Animated.parallel([
+      Animated.timing(animatedPercent, {
+        toValue: targetPercent,
+        duration,
+        useNativeDriver: false,
+        easing: Easing.out(Easing.ease),
+      }),
+      Animated.timing(animatedNeedlePercent, {
+        toValue: targetPercent,
+        duration,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.ease),
+      })
+    ]).start();
+  }, [animatedPercent, animatedNeedlePercent]);
 
   const checkPermissionAndFetchOverall = useCallback(async () => {
     const granted = hasUsagePermission();
@@ -183,21 +267,6 @@ export default function InternetScreen() {
   }, [isFocused, checkPermissionAndFetchOverall]);
 
   useEffect(() => {
-    Animated.timing(animatedValue, {
-      toValue: currentSpeed,
-      duration: 500,
-      useNativeDriver: false,
-    }).start();
-  }, [currentSpeed]);
-
-  useEffect(() => {
-    const listener = animatedValue.addListener(({ value }) => {
-      setDisplaySpeed(value);
-    });
-    return () => animatedValue.removeListener(listener);
-  }, []);
-
-  useEffect(() => {
     const fetchProvider = async () => {
       try {
         const prov = await getNetworkProvider();
@@ -219,9 +288,9 @@ export default function InternetScreen() {
     try {
       await fetch(`https://www.google.com/favicon.ico?t=${start}`, { cache: 'no-store' });
       const end = Date.now();
-      setPing(end - start);
+      return end - start;
     } catch(e) {
-      setPing(0);
+      return 0;
     }
   };
 
@@ -233,46 +302,52 @@ export default function InternetScreen() {
       abortControllerRef.current = null;
     }
     setStatusText('Test Now');
-    setCurrentSpeed(0);
+    animateToSpeed(0, 300);
   };
 
   const runNativeSpeedTest = (type: 'download' | 'upload') => {
     return new Promise<number>(async (resolve) => {
-      let speeds: number[] = [];
       const startTime = Date.now();
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
 
+      // Precompute 5MB payload once to avoid JS thread memory locks/setup overhead
+      const UPLOAD_PAYLOAD = '0'.repeat(5000000);
+
+      // Spawn 3 concurrent download/upload fetch requests to fully saturate the pipeline
+      const CONCURRENT_WORKERS = 3;
       const runFetchLoop = async () => {
         while (isTestingRef.current) {
           try {
             if (type === 'download') {
-              await fetch(`https://speed.cloudflare.com/__down?bytes=50000000&t=${Date.now()}`, { signal: abortController.signal, cache: 'no-store' });
+              await fetch(`https://speed.cloudflare.com/__down?bytes=25000000&t=${Date.now()}`, { 
+                signal: abortController.signal, 
+                cache: 'no-store' 
+              });
             } else {
               await fetch(`https://speed.cloudflare.com/__up?t=${Date.now()}`, { 
                 method: 'POST', 
-                body: '0'.repeat(10000000), // 10MB
+                body: UPLOAD_PAYLOAD,
                 headers: { 'Content-Type': 'text/plain' },
                 signal: abortController.signal 
               });
             }
-          } catch(e) { break; }
+            await new Promise(r => setTimeout(r, 20));
+          } catch(e) {
+            break;
+          }
         }
       };
 
-      runFetchLoop();
+      for (let i = 0; i < CONCURRENT_WORKERS; i++) {
+        runFetchLoop();
+      }
 
-      let lastTime = startTime;
-      let lastRx = 0;
-      let lastTx = 0;
-      
-      try {
-        const initialStats = await getLiveTrafficStats();
-        lastRx = initialStats.reduce((sum, app) => sum + app.rxBytes, 0);
-        lastTx = initialStats.reduce((sum, app) => sum + app.txBytes, 0);
-      } catch(e) {}
+      const initialBytes = type === 'download' ? getAppRxBytes() : getAppTxBytes();
+      const samples: { time: number; bytes: number }[] = [{ time: startTime, bytes: initialBytes }];
+      let smoothSpeed = 0;
 
-      const interval = setInterval(async () => {
+      const interval = setInterval(() => {
         if (!isTestingRef.current) {
           clearInterval(interval);
           resolve(0);
@@ -280,42 +355,38 @@ export default function InternetScreen() {
         }
 
         const now = Date.now();
-        const delta = now - lastTime;
-        
-        try {
-          const stats = await getLiveTrafficStats();
-          const currentRx = stats.reduce((sum, app) => sum + app.rxBytes, 0);
-          const currentTx = stats.reduce((sum, app) => sum + app.txBytes, 0);
-          
-          const rxDiff = Math.max(0, currentRx - lastRx);
-          const txDiff = Math.max(0, currentTx - lastTx);
-          
-          const bytes = type === 'download' ? rxDiff : txDiff;
-          const bits = bytes * 8;
-          const mbps = (bits / (delta / 1000)) / 1000000;
-          
-          if (mbps > 0) {
-            speeds.push(mbps);
-            setCurrentSpeed(mbps);
-          }
-          
-          lastRx = currentRx;
-          lastTx = currentTx;
-          lastTime = now;
-        } catch(e) {}
-        
+        const currentBytes = type === 'download' ? getAppRxBytes() : getAppTxBytes();
+        samples.push({ time: now, bytes: currentBytes });
+
+        // Keep last 1000ms of history for sliding window
+        const cutoff = now - 1000;
+        while (samples.length > 2 && samples[0].time < cutoff) {
+          samples.shift();
+        }
+
+        const oldest = samples[0];
+        const newest = samples[samples.length - 1];
+        const timeDiff = (newest.time - oldest.time) / 1000; // in seconds
+        const bytesDiff = Math.max(0, newest.bytes - oldest.bytes);
+        const rawSpeed = timeDiff > 0 ? (bytesDiff * 8 / timeDiff) / 1000000 : 0;
+
+        // Exponential moving average for ultimate smoothing
+        smoothSpeed = smoothSpeed === 0 ? rawSpeed : smoothSpeed * 0.7 + rawSpeed * 0.3;
+        animateToSpeed(smoothSpeed, 50);
+
         if (now - startTime >= 10000) {
-          isTestingRef.current = false;
           clearInterval(interval);
           if (abortControllerRef.current) {
             abortControllerRef.current.abort();
           }
-          
-          speeds.sort((a, b) => b - a);
-          const topSpeeds = speeds.slice(0, Math.max(1, Math.floor(speeds.length * 0.8)));
-          resolve(topSpeeds.length > 0 ? topSpeeds.reduce((a,b)=>a+b,0)/topSpeeds.length : 0);
+
+          // Calculate final mathematically exact average speed
+          const totalDuration = (now - startTime) / 1000;
+          const totalBytes = Math.max(0, currentBytes - initialBytes);
+          const finalAvgSpeed = totalDuration > 0 ? (totalBytes * 8 / totalDuration) / 1000000 : 0;
+          resolve(finalAvgSpeed);
         }
-      }, 500);
+      }, 50); // Query stats every 50ms for live sensitivity
     });
   };
 
@@ -324,24 +395,31 @@ export default function InternetScreen() {
     setIsTesting(true);
     setDownloadSpeed(null);
     setUploadSpeed(null);
-    setCurrentSpeed(0);
     setPing(null);
+    animateToSpeed(0, 0); // instantly reset needle to 0
     
-    await measurePing();
+    const pingVal = await measurePing();
     if (!isTestingRef.current) return;
     
     setStatusText('Testing Download...');
     const dSpeed = await runNativeSpeedTest('download'); 
     if (!isTestingRef.current) return;
-    setDownloadSpeed(dSpeed);
-    setCurrentSpeed(0);
+    
+    // Reset needle to 0 smoothly before upload test
+    animateToSpeed(0, 400);
+    await new Promise(r => setTimeout(r, 500));
+    if (!isTestingRef.current) return;
     
     setStatusText('Testing Upload...');
     isTestingRef.current = true; // reset true for next phase
     const uSpeed = await runNativeSpeedTest('upload');
     if (!isTestingRef.current) return;
+    animateToSpeed(0, 400); // return to 0 smoothly at the end
+    
+    // Set all results at the very end of the test!
+    setPing(pingVal);
+    setDownloadSpeed(dSpeed);
     setUploadSpeed(uSpeed);
-    setCurrentSpeed(uSpeed);
     
     setStatusText('Test Complete');
     setIsTesting(false);
@@ -454,7 +532,7 @@ export default function InternetScreen() {
           </View>
         ) : (
           <>
-            <Speedometer value={displaySpeed > 0 ? displaySpeed : (downloadSpeed || uploadSpeed || 0)} />
+            <Speedometer animatedPercent={animatedPercent} animatedNeedlePercent={animatedNeedlePercent} />
 
             <View style={styles.actionContainer}>
               <TouchableOpacity 

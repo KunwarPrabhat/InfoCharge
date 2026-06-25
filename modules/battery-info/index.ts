@@ -29,6 +29,14 @@ export async function getLiveTrafficStats(): Promise<NetworkUsageStat[]> {
   return await BatteryInfoModule.getLiveTrafficStats();
 }
 
+export function getAppRxBytes(): number {
+  return BatteryInfoModule.getAppRxBytes();
+}
+
+export function getAppTxBytes(): number {
+  return BatteryInfoModule.getAppTxBytes();
+}
+
 export async function getNetworkProvider(): Promise<string> {
   return await BatteryInfoModule.getNetworkProvider();
 }
